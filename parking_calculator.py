@@ -28,7 +28,7 @@ def get_possible_ep(adv_plus, ep_mult):
     result = np.outer(base_ep, ep_mult).astype(int)
     return result
 
-def ukp_solver(target, combination):
+def ukp_solver(target, combination, get_dp_memory = False):
     dp_memory = [0]
     for i in range(1, target + 1):
         ans = -1
@@ -37,6 +37,8 @@ def ukp_solver(target, combination):
                 ans = pts 
                 break
         dp_memory.append(ans)
+    if get_dp_memory: # for debugging and experimentation
+        return dp_memory
     if dp_memory[-1] == -1:
         return False
     else:
@@ -120,3 +122,9 @@ if result:
     print("Park found!: ", result)
 else:
     print("Park not found! Try again ~")
+    print("Tips: you are guaranteed to find a park as long as you are at least 1329 points under your park goal!")
+
+# exploring minimum gap from park goal to guarantee a park
+# result = ukp_solver(target_ep - current_ep, get_possible_ep(adv_plus, np.array(get_ep_mult(ep_bonus))).flatten(), get_dp_memory = True)
+# print(max(loc for loc, val in enumerate(result) if val == -1))
+# conclusion: you are guaranteed to find a park as long as you are at least 1329 points under your park goal!
