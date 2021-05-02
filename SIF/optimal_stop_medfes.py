@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 from itertools import accumulate
 
+# @author: Olionheart
 # edit the note count of available songs here
 song_note_count = [599,550,537,533,500,431,429,424]
 
-# do not edit
+# do not edit (unless you're sure I made a mistake)
 song_count = len(song_note_count)
 medley_note_count = list()
 for i in range(song_count-2):
