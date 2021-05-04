@@ -29,6 +29,7 @@ Assumption:
 Based on discussion in discord.gg/sif #sif_chat with DataGryphon and Pumick
 Bug Fix(es):
 - #1, 4 May 2021, multiply sru length by note density upon activation
+- #2, 4 May 2021, fixed team tap multiplier (divide by 9, assume even note distribution)
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -264,7 +265,7 @@ def get_tap_score(note_count, team_power, team_bonus, accuracy):
             note_mult += 1.3
         else:
             note_mult += 1.35
-    return 0.0125 * (0.88 + 0.12 * accuracy / 100) * team_power * (1 + 0.1 * team_bonus) * note_mult
+    return 0.0125 * (0.88 + 0.12 * accuracy / 100) * team_power * (1 + 0.1 * team_bonus / 9) * note_mult
 
 if __name__ == "__main__":
     tap_score = get_tap_score(total_note, team_tap_power, team_tap_mult, perfect_rate)
