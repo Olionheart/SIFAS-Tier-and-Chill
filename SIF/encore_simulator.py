@@ -30,6 +30,7 @@ Based on discussion in discord.gg/sif #sif_chat with DataGryphon and Pumick
 Bug Fix(es):
 - #1, 4 May 2021, multiply sru length by note density upon activation
 - #2, 4 May 2021, fixed team tap multiplier (divide by 9, assume even note distribution)
+- #3, 4 May 2021, added a catch-all parameter tap_score_modifier
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,6 +40,7 @@ total_note = 698 # note count of the song of interest (porkbun's default for mas
 note_density = 6.17 # average note density
 team_tap_power = 70000 # total team attribute (smile/pure/cool) that is relevant to the song
 team_tap_mult = 9 # total team multiplier (1 for each card that match song attribute and 1 for each card that match song group)
+tap_score_modifier = 1 # a catch-all parameter to help you tune the calculated tap score to match what you actually get when you turn skills off
 perfect_rate = 85 # tap perfect rate
 encore_note = 26 # note count of scorer and encore
 amp1_note = 22 # note count of 1st amp
@@ -268,7 +270,7 @@ def get_tap_score(note_count, team_power, team_bonus, accuracy):
     return 0.0125 * (0.88 + 0.12 * accuracy / 100) * team_power * (1 + 0.1 * team_bonus / 9) * note_mult
 
 if __name__ == "__main__":
-    tap_score = get_tap_score(total_note, team_tap_power, team_tap_mult, perfect_rate)
+    tap_score = get_tap_score(total_note, team_tap_power, team_tap_mult, perfect_rate) * tap_score_modifier
     simulated_score = list()
     for simulation_round in range(10000):
         simulated_score.append(simulate() + tap_score)
