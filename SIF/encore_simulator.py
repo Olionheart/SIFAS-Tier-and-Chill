@@ -27,6 +27,8 @@ Assumption:
 - both sru and amp do not affect things that activate on same note
 - when in doubt just coinflip like klab and it'll probably turn out close :DiaLUL: - DataGryphon, 2021 
 Based on discussion in discord.gg/sif #sif_chat with DataGryphon and Pumick
+Bug Fix(es):
+- #1, 4 May 2021, multiply sru length by note density upon activation
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,7 +57,7 @@ scorer_mag = [4025, 4430, 5240, 6455, 8070, 8535, 9465, 10855, 12710] # score ga
 sru_mag = [27, 29, 32, 37, 44, 55, 60, 70, 86, 106] # skill chance up of sru
 sru_len = [6, 6.5] # skill duration of sru
 
-# Do NOT edit
+# Do NOT edit (unless you know what you're doing)
 def rng(chance):
     if chance > 100:
         return True
@@ -105,7 +107,7 @@ def simulate():
             # sru ends prior to this note (we will assume that it is virtually impossible for the sru to end on the exact frame of the note)
             # check if sru will renew itself
             if sru_self_covered and rng(sru_chance):
-                sru_end_note += amp(sru_len, current_amp_charge)
+                sru_end_note += amp(sru_len, current_amp_charge) * note_density
                 sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
                 last_activated_skill = "sru"
                 last_skill_amp_level = current_amp_charge
@@ -138,7 +140,7 @@ def simulate():
                     if scorer_activate:
                         score += 2.5 * amp(scorer_mag, 0) * (1 + num_proc)
                     if sru_activate:
-                        sru_end_note = note + amp(sru_len, 0)
+                        sru_end_note = note + amp(sru_len, 0) * note_density
                         sru_active_mag = 1 + amp(sru_mag, 0) / 100
                         sru_self_covered = False
                         sru_active = True
@@ -153,10 +155,10 @@ def simulate():
                         score += 2.5 * amp(scorer_mag, current_amp_charge) * (1 + num_proc)
                     if sru_activate:
                         if scorer_activate:
-                            sru_end_note = note + amp(sru_len, 0)
+                            sru_end_note = note + amp(sru_len, 0) * note_density
                             sru_active_mag = 1 + amp(sru_mag, 0) / 100
                         else:
-                            sru_end_note = note + amp(sru_len, current_amp_charge)
+                            sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
                             sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
                         sru_self_covered = False
                         sru_active = True
@@ -178,12 +180,12 @@ def simulate():
                     else:
                         last_activated_skill = "encore"
                     current_amp_charge = 0
-                    sru_end_note = note + amp(sru_len, 0)
+                    sru_end_note = note + amp(sru_len, 0) * note_density
                     sru_active_mag = 1 + amp(sru_mag, 0) / 100
                     sru_self_covered = False
                     sru_active = True
                 else: # sru proc only
-                    sru_end_note = note + amp(sru_len, current_amp_charge)
+                    sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
                     sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
                     sru_self_covered = False
                     sru_active = True
@@ -208,7 +210,7 @@ def simulate():
                             last_skill_amp_level = 0
                             current_amp_charge = 0
                     elif last_activated_skill == "sru" and not sru_active and num_proc >= 1:
-                        sru_end_note = note + amp(sru_len, last_skill_amp_level)
+                        sru_end_note = note + amp(sru_len, last_skill_amp_level) * note_density
                         sru_active_mag = 1 + amp(sru_mag, last_skill_amp_level) / 100
                         sru_self_covered = False
                         sru_active = True
@@ -220,10 +222,10 @@ def simulate():
             if amp_activate:
                 if sru_activate:
                     if amp_coin_flip:
-                        sru_end_note = note + amp(sru_len, 0)
+                        sru_end_note = note + amp(sru_len, 0) * note_density
                         sru_active_mag = 1 + amp(sru_mag, 0) / 100
                     else:
-                        sru_end_note = note + amp(sru_len, current_amp_charge)
+                        sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
                         sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
                         current_amp_charge = 0
                     sru_active = True
@@ -235,7 +237,7 @@ def simulate():
                 last_activated_skill = "amp"
                 last_skill_amp_level = 0
             elif sru_activate:
-                sru_end_note = note + amp(sru_len, current_amp_charge)
+                sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
                 sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
                 sru_active = True
                 sru_self_covered = False
@@ -270,7 +272,7 @@ if __name__ == "__main__":
     for simulation_round in range(10000):
         simulated_score.append(simulate() + tap_score)
     
-    plt.hist(simulated_score)
+    plt.hist(simulated_score, 20)
     plt.show()
 
     print("Simulation Result")
