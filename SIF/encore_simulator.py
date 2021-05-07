@@ -31,6 +31,7 @@ Bug Fix(es):
 - #1, 4 May 2021, multiply sru length by note density upon activation
 - #2, 4 May 2021, fixed team tap multiplier (divide by 9, assume even note distribution)
 - #3, 4 May 2021, added a catch-all parameter tap_score_modifier
+Note density look-up: https://docs.google.com/spreadsheets/d/1D48qaGuk4cjh8nbZkpR3NqGjO57jhKwkfS6Chqg7rV4/
 """
 import numpy as np
 import matplotlib.pyplot as plt
