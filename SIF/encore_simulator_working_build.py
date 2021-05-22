@@ -42,12 +42,12 @@ import matplotlib.pyplot as plt
 # Edit parameters here
 total_note = 840 # note count of the song of interest (porkbun's default for master is 698)
 note_density = 7.49 # average note density
-team_tap_power = 94453 # total team attribute (smile/pure/cool) that is relevant to the song
-team_tap_mult = 13 # total team multiplier (1 for each card that match song attribute and 1 for each card that match song group)
+team_tap_power = 80329 # total team attribute (smile/pure/cool) that is relevant to the song
+team_tap_mult = 6 # total team multiplier (1 for each card that match song attribute and 1 for each card that match song group)
 tap_score_modifier = 1.026 * 1.1 # a catch-all parameter to help you tune the calculated tap score to match what you actually get when you turn skills off
 skill_proc_modifier = 1.1 # for chalfes/medfes
-perfect_rate = 95 # tap perfect rate
-loadout_profile = 11 # so you can configure a few teams and change just one line to switch
+perfect_rate = 90 # tap perfect rate
+loadout_profile = 0 # so you can configure a few teams and change just one line to switch
 loadout_name = "default"
 
 # default team parameters (i.e. loadout 0)
