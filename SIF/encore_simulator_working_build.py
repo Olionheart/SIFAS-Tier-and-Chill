@@ -408,7 +408,7 @@ if __name__ == "__main__":
     for simulation_round in range(10000):
         simulated_score.append(simulate() + tap_score)
     
-    plt.hist(simulated_score, 20)
+    plt.hist(simulated_score, 50)
     plt.show()
 
     print("Simulation Result")
