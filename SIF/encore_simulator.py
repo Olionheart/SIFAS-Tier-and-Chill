@@ -1,12 +1,11 @@
 """
-@author: Olionheart
-Encore Simulator 1.0
-Not optimized or generalized!
-Status: just completed implementation - not tested with experimental results yet!
-Supports standard scorer encore teams only
+@author: Olionheart (IGN:『TC』Olion♡)
+Encore Simulator 1.1
+Semi-generalized encore simulator for School Idol Festival (SIF)
+Supports teams comprised of note-based scorers, amps, encores, and sru
+Not tested yet but will be tested with limited experimental results and previous version of simulator - should work fine for "standard" encore teams
 Assumption:
 - uniform note density and full combo
-- team has 5 encorer + 1 scorer of same note activation, 2 amps, and 1 sru
 - scorer is always placed to the right of amp/sru and is equipped with a charm
 - activation order on same note: scorer/sru from right-to-left order, encore, amp
 - when multiple skills including amp activates on same note, there is a 50/50 chance for the amp to be consumed by amp activation vs right-to-left non-amp/encore
@@ -25,6 +24,8 @@ Assumption:
   - when sru is not active, sru can proc on xn-th note even if it didn't end on xn-th note
   - for example, suppose that 32n sru ended on note 60, it has a chance to proc again on note 64
 - both sru and amp do not affect things that activate on same note
+- sru never ends exactly on a note
+- encores are placed to the left of amps so that encore will not repeat amp if actual amp is to activate (i.e. so as to not waste the amp in this specific case) - unconfirmed speculation by pumick
 - when in doubt just coinflip like klab and it'll probably turn out close :DiaLUL: - DataGryphon, 2021 
 Based on discussion in discord.gg/sif #sif_chat with DataGryphon and Pumick
 Bug Fix(es):
@@ -34,160 +35,154 @@ Bug Fix(es):
 Update(s):
 - #1, 22 May 2021, added loadout and skill_proc_modifier
 - #2, 22 May 2021, the simulation now supports note-based scorers that doesn't sync with encore (encore still needs to sync with each other) *** ignores amp-stealing of amp on amp-scorer without encore note ***
-Note density look-up: https://docs.google.com/spreadsheets/d/1D48qaGuk4cjh8nbZkpR3NqGjO57jhKwkfS6Chqg7rV4/
+- #3, 23 May 2021, huge overhaul, v.1.1 - the simulation should now support any note-based scorers (not necessarily just one scorer), multiple amps, multiple sru, and encores of different note (probably very bad lol)
+Note density look-up (provided by Gryphon): https://docs.google.com/spreadsheets/d/1D48qaGuk4cjh8nbZkpR3NqGjO57jhKwkfS6Chqg7rV4/
 """
+import enum
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Edit parameters here
+suppress_distribution_plot = False
+
+# song parameter
+# TODO: load song parameter from a txt or json file
 total_note = 840 # note count of the song of interest (porkbun's default for master is 698)
+song_attribute = 1 # 0 if smile, 1 if pure, 2 if cool
 note_density = 7.49 # average note density
-team_tap_power = 94453 # total team attribute (smile/pure/cool) that is relevant to the song
-team_tap_mult = 13 # total team multiplier (1 for each card that match song attribute and 1 for each card that match song group)
 tap_score_modifier = 1.026 * 1.1 # a catch-all parameter to help you tune the calculated tap score to match what you actually get when you turn skills off
 skill_proc_modifier = 1.1 # for chalfes/medfes
-perfect_rate = 95 # tap perfect rate
-loadout_profile = 11 # so you can configure a few teams and change just one line to switch
+perfect_rate = 90 # tap perfect rate
+
+# select loadout
+loadout_profile = 0 # so you can configure a few teams and change just one line to switch
 loadout_name = "default"
 
-# default team parameters (i.e. loadout 0)
-encore_note = 25 # note count of encore
-scorer_note = 25 # note count of scorer (ideally should match the encore)
-amp1_note = 20 # note count of 1st amp
-amp2_note = 22 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
-sru_note = 32 # note count of sru
-encore_chance = [42, 42, 42, 42, 38] # list of your encore activation chance, should be of length 5
-amp1_chance = 66 # activation chance of 1st amp
-amp2_chance = 72 # activation chance of 2nd amp
-scorer_chance = 56 # activation chance of scorer
-sru_chance = 40 # activation chance of sru
-amp1_sl = 8 # skill level of 1st amp
-amp2_sl = 8 # skill level of 2nd amp
+# team tap-related parameter
+team_attribute = [40022, 80329, 40312] # a list of total team attribute (smile/pure/cool) that is relevant to the song
+team_tap_mult = [2, 6, 1] # a list of total team multiplier (1 for each card that match song attribute and 1 for each card that match song group) for each attribute
+
+# team skill-related parameter
+encore_note = [25] # a list of note count of encore, no duplicate (i.e. if you have 5x 25n encores, write [25])
+score_note = [25] # a list of note count of each scorer, from right to left
+amp_note = [20, 22] # a list of note count of each amp, from right to left
+sru_note = [32] # a list of note count of each sru, from right to left (assumes that sru is to the left of all scorers)
+encore_chance = [[42, 42, 42, 42, 38]] # list of list of activation rate of each encore, in the same order as encore_note
+score_chance = [56] # list of activation rate of each scorer, from right to left
+amp_chance = [66, 72] # list of activation rate of each amp, from right to left
+sru_chance = [40] # list of activation rate of each sru, from right to left (assumes that sru is to the left of all scorers)
 # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
-scorer_mag = [4435, 4875, 5760, 7090, 8860, 9370, 10385, 11915, 13955] # score gain from scorer, pre-charm
-sru_mag = [22, 24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
-sru_len = [7.5, 8] # skill duration of sru
+score_mag = [[4435, 4875, 5760, 7090, 8860, 9370, 10385, 11915, 13955]] # list of list of magnitude of each scorer
+amp_mag = [8, 8] # list of skill level of each amp
+sru_mag = [[22, 24, 26, 31, 39, 49, 54, 64, 79, 98]] # list of list of magnitude of each sru
+sru_len = [[7.5, 8]] # list of list of duration of each sru
 
-# replace eli sru with maki sru
-if loadout_profile == 2:
-    team_tap_power = 103438
-    sru_chance = 42 # activation chance of sru
-    sru_mag = [27, 29, 32, 37, 44, 55, 60, 70, 86, 106] # skill chance up of sru
-    sru_len = [5.5, 6] # skill duration of sru
-    team_tap_mult = 14
-
-# eli sru maxed
-if loadout_profile == 3:
-    team_tap_power = 94453
-    sru_chance = 43 # activation chance of sru
-    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
-    sru_len = [8] # skill duration of sru
-    team_tap_mult = 13
-    encore_chance = [42, 42, 42, 46, 46]
-
-# eli sru maxed, replace bokuhika maki with soreboku
-if loadout_profile == 4:
-    team_tap_power = 94453
-    sru_chance = 43 # activation chance of sru
-    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
-    sru_len = [8] # skill duration of sru
-    team_tap_mult = 13
-    amp1_note = 21
-    amp1_chance = 72
-    encore_chance = [42, 42, 42, 46, 46]
-
-# eli sru maxed, upgrade encore instead of new amp
-if loadout_profile == 5:
-    team_tap_power = 94453
-    sru_chance = 43 # activation chance of sru
-    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
-    sru_len = [8] # skill duration of sru
-    team_tap_mult = 13
-    encore_chance = [50, 50, 46, 46, 46]
-
-# marucore with zodiac maki
-if loadout_profile == 6:
-    team_tap_power = 80507
-    team_tap_mult = 11
-    encore_note = 26 # note count of encore
-    scorer_note = 26
-    encore_chance = [40, 40, 40, 40, 40] # list of your encore activation chance, should be of length 5
-    scorer_chance = 64 # activation chance of scorer
-    amp1_sl = 8 # skill level of 1st amp
-    amp2_sl = 8 # skill level of 2nd amp
-    # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
-    scorer_mag = [4025, 4430, 5240, 6455, 8070, 8535, 9465, 10855, 12710] # score gain from scorer, pre-charm
-
-# elicore 3 unity 2 soreboku
-if loadout_profile == 7:
-    team_tap_power = 68945
-    team_tap_mult = 4
-    encore_chance = [42, 42, 38, 38, 38]
-
-# elicore 2 unity 3 soreboku
-if loadout_profile == 8:
-    team_tap_power = 65961
-    team_tap_mult = 3
-    encore_chance = [42, 42, 42, 38, 38]
-
-# elicore 1 unity 4 soreboku
-if loadout_profile == 9:
-    team_tap_power = 62859
-    team_tap_mult = 2
-    encore_chance = [42, 42, 42, 42, 38]
-
-# elicore 10 mic
-if loadout_profile == 10:
-    loadout_name = "elicore 10 mic"
-    team_tap_power = 94453
-    sru_chance = 43 # activation chance of sru
-    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
-    sru_len = [8] # skill duration of sru
-    team_tap_mult = 13
-    encore_chance = [54, 54, 54, 54, 54]
-
-
-# test: cheer rin 30n scorer + panacore 30n
-if loadout_profile == 11:
-    loadout_name = "15n/30n panacore test"
-    encore_note = 30 # note count of scorer and encore
-    scorer_note = 15 # SPECIAL: 15n scorer and 30n amp case (or any case where scorer has exactly half the note requirement of encorer)
-    amp1_note = 21 # note count of 1st amp
-    amp2_note = 22 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
-    sru_note = 31 # note count of sru
-    encore_chance = [65, 65, 65, 65, 65] # list of your encore activation chance, should be of length 5
-    amp1_chance = 69 # activation chance of 1st amp
-    amp2_chance = 72 # activation chance of 2nd amp
-    scorer_chance = 64 # activation chance of scorer
-    sru_chance = 41 # activation chance of sru
-    amp1_sl = 8 # skill level of 1st amp
-    amp2_sl = 8 # skill level of 2nd amp
-    # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
-    scorer_mag = [2200, 2425, 2880, 3555, 4460, 4715, 5225, 5990, 7015] # score gain from scorer, pre-charm
-    sru_mag = [26, 26, 31, 39, 51, 54, 64, 79, 102] # skill chance up of sru
-    sru_len = [7] # skill duration of sru
-
-# test: cheer rin 30n scorer + panacore 30n
-if loadout_profile == 12:
-    loadout_name = "30n/30n panacore test"
-    encore_note = 30 # note count of scorer and encore
-    scorer_note = 30 # SPECIAL: 15n scorer and 30n amp case (or any case where scorer has exactly half the note requirement of encorer)
-    amp1_note = 21 # note count of 1st amp
-    amp2_note = 22 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
-    sru_note = 31 # note count of sru
-    encore_chance = [65, 65, 65, 65, 65] # list of your encore activation chance, should be of length 5
-    amp1_chance = 69 # activation chance of 1st amp
-    amp2_chance = 72 # activation chance of 2nd amp
-    scorer_chance = 64 # activation chance of scorer
-    sru_chance = 41 # activation chance of sru
-    amp1_sl = 8 # skill level of 1st amp
-    amp2_sl = 8 # skill level of 2nd amp
-    # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
-    scorer_mag = [4385, 9145, 9145, 9145, 9145, 14330, 14330, 14330, 14330]  # score gain from scorer, pre-charm
-    sru_mag = [26, 26, 31, 39, 51, 54, 64, 79, 102] # skill chance up of sru
-    sru_len = [7] # skill duration of sru
+assert len(encore_note) == len(encore_chance)
+assert len(score_note) == len(score_chance)
+assert len(score_note) == len(score_mag)
+assert len(amp_note) == len(amp_chance)
+assert len(amp_note) == len(amp_mag)
+assert len(sru_note) == len(sru_chance)
+assert len(sru_note) == len(sru_mag)
+assert len(sru_note) == len(sru_len)
 
 # Do NOT edit (unless you know what you're doing)
+class SkillType(enum.Enum):
+    ENCORE = 0
+    SCORE = 1
+    AMP = 2
+    SRU = 3
+    NONE = 4
+ 
+class GameState:
+    def __init__(self, sru_count):
+        self.score = 0 # skill-based score
+        self.amp_coin_flip = rng(50) # if true, amp will steal amp charge on tie with scorer/sru
+        self.last_skill = SkillType.NONE # last activated skill, for encore repeat
+        self.last_mag = 0 # associated magnitude, store the score if scorer, store (mag, len) if sru, store 0 if amp/encore (not used because encore cannot repeat them)
+        self.curr_amp = 0 # current amp charge
+        self.sru_active = False # True if there is active sru coverage, False otherwise
+        self.sru_mag = 1 # skill rate amplification - 1 if sru is not active, 1 + x / 100 if sru of magnitude x is active
+        self.sru_covered = [False] * sru_count # track self-covered state of each sru independently
+        self.sru_end_note = 0 # track the note that current sru will end on, 0 if sru is not active
+        self.sru_count = sru_count # used to reset sru_covered
+
+    # get final score
+    def get_score(self):
+        return self.score * 2.5 # resolve charm multiplier here ***
+
+    # call to check the current amp charge
+    def get_amp(self):
+        return self.curr_amp
+
+    # call when amp activates
+    def proc_amp(self, new_amp_lvl):
+        self.curr_amp = new_amp_lvl
+        self.last_skill = SkillType.AMP
+        self.last_mag = 0
+        # does not need to clear amp
+
+    # call when scorer activate
+    def proc_score(self, score):
+        self.score += score
+        self.last_skill = SkillType.SCORE
+        self.last_mag = score
+        self.curr_amp = 0 # consumes amp
+
+    # call when encore(s) activate
+    # num_proc = number of encores that activate
+    # scorer_bypass_mag = the magnitude of the scorer that activates on the same note, 0 if no scorer activates on the same note
+    # curr_note = the current note, in case the encore repeats SRU
+    def proc_encore(self, num_proc, scorer_bypass_mag, curr_note):
+        if scorer_bypass_mag == 0:
+            if self.last_skill == SkillType.SCORE:
+                self.score += self.last_mag * num_proc
+                self.curr_amp = 0 # consumes amp (sadly)
+            elif self.last_skill == SkillType.SRU and not self.sru_active:
+                # if SRU is already active, this will be skipped because encore cannot repeat SRU when it is already active
+                self.sru_active = True
+                self.sru_mag = self.last_mag[0]
+                self.sru_end_note = curr_note + self.last_mag[1] * note_density
+                self.sru_covered = [False] * self.sru_count
+                self.curr_amp = 0 # consumes amp (sadly)
+            # else, last_skill is either encore, amp, or none
+            # in this case, do nothing because encore or none can't be repeated
+            # while repeating amp results in essentially nothing
+        else:
+            self.score += scorer_bypass_mag * num_proc
+            self.curr_amp = 0 # consumes amp - should be redundant, but making sure
+        self.last_skill = SkillType.ENCORE
+        self.last_mag = 0
+
+    # call when sru procs, either on note or renew
+    def proc_sru(self, mag, len, curr_note):
+        self.sru_active = True
+        self.sru_mag = mag
+        self.sru_end_note = curr_note + len * note_density
+        self.sru_covered = [False] * self.sru_count
+        self.last_skill = SkillType.SRU
+        self.last_mag = (mag, len)
+        self.curr_amp = 0 # consumtes amp
+
+    # call to reset sru status when an sru ends (and does not renew)
+    def sru_end(self):
+        self.sru_active = False
+        self.sru_mag = 1
+        self.sru_end_note = 0
+        self.sru_covered = [False] * self.sru_count
+
+    # call when sru_active and activation note of the sru passes (i.e. self-coverage)
+    def sru_self_cover(self, sru_index):
+        self.sru_self_cover[sru_index] = True
+
+    # call to determine if sru will renew itself
+    # return the index of the sru that will renew the sru state
+    # if no sru will proc, return -1
+    def rng_sru_self_coverage(self):
+        for index in range(self.sru_count):
+            if self.sru_self_cover[index] and rng(sru_chance[index]):
+                return index
+        return -1
+
 def rng(chance):
     chance *= skill_proc_modifier
     if chance > 100:
@@ -219,169 +214,99 @@ def amp(skill_power_list, amp_level):
         return skill_power_list[-1]
     return skill_power_list[amp_level]
 
-def simulate():
-    score = 0
-    amp_coin_flip = rng(50) # if true, amp will steal amp charge on tie with scorer/sru
-    current_amp_charge = 0
-    last_activated_skill = None
-    last_skill_amp_level = 0
-    sru_active = False
-    sru_active_mag = 1
-    sru_self_covered = False
-    sru_end_note = 0
+def generate_spell_queue(note_count, skill_note):
+    spell_queue = list()
+    for note in skill_note:
+        i = 1
+        while i * note <= note_count:
+            spell_queue.append(i * note)
+            i += 1
+    spell_queue = list(set(spell_queue))
+    spell_queue.sort()
+    return spell_queue
 
-    for note in range(1, total_note + 1):
-        encore_activate = (note % encore_note == 0)
-        sru_activate = (note % sru_note == 0)
-        
-        if sru_active and note > sru_end_note:
-            # sru ends prior to this note (we will assume that it is virtually impossible for the sru to end on the exact frame of the note)
+def schedule_amp(note, active_sru_mag):
+    for i in range(len(amp_note)):
+        if (note % amp_note[i] == 0) and rng(amp_chance[i] * active_sru_mag):
+            return i
+    return -1
+
+def schedule_sru(note, is_sru_active):
+    if is_sru_active:
+        return -1
+    for i in range(len(sru_note)):
+        if (note % sru_note[i] == 0) and rng(sru_chance[i]):
+            return i
+    return -1
+
+def schedule_encore(note, active_sru_mag):
+    count = 0
+    for i in range(len(encore_note)):
+        if note % encore_note == 0:
+            count += num_encore_proc(encore_chance[i], active_sru_mag)
+    return count
+
+def simulate(spell_queue):
+    game_state = GameState(len(sru_note))
+    for note in spell_queue:
+        # resolve expired (or renewed) sru
+        if game_state.sru_active and note > game_state.sru_end_note:
+            # sru ends prior to this note (we assume that sru does not end on the exact frame of the note)
             # check if sru will renew itself
-            if sru_self_covered and rng(sru_chance):
-                sru_end_note += amp(sru_len, current_amp_charge) * note_density
-                sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
-                last_activated_skill = "sru"
-                last_skill_amp_level = current_amp_charge
-                current_amp_charge = 0
+            sru_index = game_state.rng_sru_self_coverage()
+            if sru_index != -1:
+                new_sru_mag = 1 + amp(sru_mag[sru_index], game_state.get_amp()) / 100
+                new_sru_len = amp(sru_len[sru_index], game_state.get_amp())
+                game_state.proc_sru(new_sru_mag, new_sru_len, game_state.sru_end_note)
             else:
-                sru_active = False
-                # redundancy, just to be safe
-                sru_end_note = 0
-                sru_active_mag = 1
-                sru_self_covered = False
+                game_state.sru_end()
 
-        if sru_activate and sru_active:
-            # sru cannot activate, but set self-covered state to true
-            sru_self_covered = True
-            sru_activate = False
-        
-        if sru_activate:
-            sru_activate = rng(sru_chance)
-            # after this line, sru_activate will be true if and only if sru will proc on this note
-        
-        amp1_activate = (note % amp1_note == 0 and rng(amp1_chance * sru_active_mag))
-        amp2_activate = (note % amp2_note == 0 and rng(amp2_chance * sru_active_mag))
-        scorer_activate = (note % scorer_note == 0) and rng(scorer_chance * sru_active_mag)
-        amp_activate = (amp1_activate or amp2_activate)
+        # resolve sru self-coverage
+        if game_state.sru_active:
+            for i in range(len(sru_note)):
+                if note % sru_note[i] == 0:
+                    game_state.sru_self_cover(i)
 
-        if encore_activate:
-            num_proc = num_encore_proc(encore_chance, sru_active_mag)
-            if amp_activate:
-                if amp_coin_flip: # amp steal amp charge
-                    if scorer_activate:
-                        score += 2.5 * amp(scorer_mag, 0) * (1 + num_proc)
-                    if sru_activate:
-                        sru_end_note = note + amp(sru_len, 0) * note_density
-                        sru_active_mag = 1 + amp(sru_mag, 0) / 100
-                        sru_self_covered = False
-                        sru_active = True
-                    if amp2_activate:
-                        current_amp_charge = get_amp_level(amp2_sl + current_amp_charge)
-                    else:
-                        current_amp_charge = get_amp_level(amp1_sl + current_amp_charge)
-                    last_activated_skill = "amp"
-                    last_skill_amp_level = 0 # it doesn't matter, encore will not touch amp
-                else:
-                    if scorer_activate:
-                        score += 2.5 * amp(scorer_mag, current_amp_charge) * (1 + num_proc)
-                    if sru_activate:
-                        if scorer_activate:
-                            sru_end_note = note + amp(sru_len, 0) * note_density
-                            sru_active_mag = 1 + amp(sru_mag, 0) / 100
-                        else:
-                            sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
-                            sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
-                        sru_self_covered = False
-                        sru_active = True
-                    if scorer_activate or sru_activate or num_proc > 0:
-                        current_amp_charge = 0
-                    if amp2_activate:
-                        current_amp_charge = get_amp_level(amp2_sl + current_amp_charge)
-                    else:
-                        current_amp_charge = get_amp_level(amp1_sl + current_amp_charge)
-                    last_activated_skill = "amp"
-                    last_skill_amp_level = 0
-                    
-            elif sru_activate: # encore-scorer combo with sru - encore will not interfere with sru
-                if scorer_activate: # resolve scorer first                    
-                    score += 2.5 * amp(scorer_mag, current_amp_charge) * (1 + num_proc)
-                    if num_proc == 0:
-                        last_activated_skill = "sru"
-                        last_skill_amp_level = 0
-                    else:
-                        last_activated_skill = "encore"
-                    current_amp_charge = 0
-                    sru_end_note = note + amp(sru_len, 0) * note_density
-                    sru_active_mag = 1 + amp(sru_mag, 0) / 100
-                    sru_self_covered = False
-                    sru_active = True
-                else: # sru proc only
-                    sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
-                    sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
-                    sru_self_covered = False
-                    sru_active = True
-                    last_activated_skill = "sru"
-                    last_skill_amp_level = current_amp_charge
-                    current_amp_charge = 0
+        # schedule skills (score > sru > encore > amp)
+        score_schedule = [((note % score_note[i] == 0) and rng(score_chance[i] * game_state.sru_mag)) for i in range(len(score_note))] # list of boolean if each scorer will activate on this note
+        sru_schedule = schedule_sru(note, game_state.sru_active) # index of the sru that will activate on this note, -1 if no sru will activate
+        encore_schedule = schedule_encore(note, game_state.sru_mag) # number of encores to activate on this note
+        amp_schedule = schedule_amp(note, game_state.sru_mag) # index of the amp that will activate on this note, -1 if no amp will activate
 
-            else: # only encore-scorer combo
-                if scorer_activate:
-                    score += 2.5 * amp(scorer_mag, current_amp_charge) * (1 + num_proc)
-                    if num_proc == 0:
-                        last_activated_skill = "scorer"
-                        last_skill_amp_level = current_amp_charge
-                    else:
-                        last_activated_skill = "encore"
-                    current_amp_charge = 0
-                else: # scorer doesn't proc, check if encore can proc on old sru
-                    if last_activated_skill == "scorer":
-                        score += 2.5 * amp(scorer_mag, last_skill_amp_level) * num_proc
-                        if num_proc >= 1:
-                            last_activated_skill = "encore"
-                            last_skill_amp_level = 0
-                            current_amp_charge = 0
-                    elif last_activated_skill == "sru" and not sru_active and num_proc >= 1:
-                        sru_end_note = note + amp(sru_len, last_skill_amp_level) * note_density
-                        sru_active_mag = 1 + amp(sru_mag, last_skill_amp_level) / 100
-                        sru_self_covered = False
-                        sru_active = True
-                        last_activated_skill = "encore"
-                        last_skill_amp_level = 0
-                        current_amp_charge = 0
+        amp_stealing = game_state.amp_coin_flip and (amp_schedule != -1) # amp stealing happens if amp will proc and coin flip is true
+        amp_amp_power = game_state.get_amp() # is used if and only if amp_stealing is true - save amp power for the amp and clear current amp charge
+        if amp_stealing: # clear current amp charge if amp stealing
+            game_state.curr_amp = 0
+        first_scorer_proc = True # for setting scorer bypass on encore
+        scorer_bypass_mag = 0
 
-        else: # no encore-scorer combo on this note
-            if scorer_activate:
-                score += 2.5 * amp(scorer_mag, current_amp_charge)
-                last_activated_skill = "scorer"
-                last_skill_amp_level = current_amp_charge
-                current_amp_charge = 0
-            if amp_activate:
-                if sru_activate:
-                    if amp_coin_flip:
-                        sru_end_note = note + amp(sru_len, 0) * note_density
-                        sru_active_mag = 1 + amp(sru_mag, 0) / 100
-                    else:
-                        sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
-                        sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
-                        current_amp_charge = 0
-                    sru_active = True
-                    sru_self_covered = False
-                if amp2_activate:
-                    current_amp_charge = get_amp_level(amp2_sl + current_amp_charge)
-                else:
-                    current_amp_charge = get_amp_level(amp1_sl + current_amp_charge)
-                last_activated_skill = "amp"
-                last_skill_amp_level = 0
-            elif sru_activate:
-                sru_end_note = note + amp(sru_len, current_amp_charge) * note_density
-                sru_active_mag = 1 + amp(sru_mag, current_amp_charge) / 100
-                sru_active = True
-                sru_self_covered = False
-                last_activated_skill = "sru"
-                last_skill_amp_level = current_amp_charge 
-                current_amp_charge = 0   
+        # resolve skill procs
+        # resolve scorer
+        for i in range(len(score_note)):
+            if score_schedule[i]:
+                magnitude = amp(score_mag[i], game_state.get_amp())
+                if first_scorer_proc:
+                    scorer_bypass_mag = magnitude
+                    first_scorer_proc = False
+                game_state.proc_score(magnitude)
 
-    return score
+        # resolve sru
+        if sru_schedule != -1:
+            magnitude = amp(sru_mag[sru_schedule], game_state.get_amp())
+            length = amp(sru_len[sru_schedule], game_state.get_amp())
+            game_state.proc_sru(magnitude, length, note)   
+
+        # resolve encore
+        if encore_schedule != 0:
+            game_state.proc_encore(encore_schedule, scorer_bypass_mag, note)
+
+        # resolve amp
+        if amp_schedule != -1:
+            if not amp_stealing:
+                amp_amp_power = game_state.get_amp()
+            game_state.proc_amp(get_amp_level(amp_mag[amp_schedule] + amp_amp_power))
+
+    return game_state.get_score()
 
 def get_tap_score(note_count, team_power, team_bonus, accuracy):
     note_mult = 0
@@ -403,13 +328,15 @@ def get_tap_score(note_count, team_power, team_bonus, accuracy):
     return 0.0125 * (0.88 + 0.12 * accuracy / 100) * team_power * (1 + 0.1 * team_bonus / 9) * note_mult
 
 if __name__ == "__main__":
-    tap_score = get_tap_score(total_note, team_tap_power, team_tap_mult, perfect_rate) * tap_score_modifier
+    spell_queue = generate_spell_queue(total_note, set(encore_note + score_note + amp_note + sru_note))
+    tap_score = get_tap_score(total_note, team_attribute[song_attribute], team_tap_mult[song_attribute], perfect_rate) * tap_score_modifier
     simulated_score = list()
     for simulation_round in range(10000):
-        simulated_score.append(simulate() + tap_score)
-    
-    plt.hist(simulated_score, 20)
-    plt.show()
+        simulated_score.append(simulate(spell_queue) + tap_score)
+
+    if not suppress_distribution_plot:
+        plt.hist(simulated_score, 50)
+        plt.show()
 
     print("Simulation Result")
     print("Loadout:", loadout_profile)
