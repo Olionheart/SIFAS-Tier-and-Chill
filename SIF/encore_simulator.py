@@ -31,37 +31,165 @@ Bug Fix(es):
 - #1, 4 May 2021, multiply sru length by note density upon activation
 - #2, 4 May 2021, fixed team tap multiplier (divide by 9, assume even note distribution)
 - #3, 4 May 2021, added a catch-all parameter tap_score_modifier
+Update(s):
+- #1, 22 May 2021, added loadout and skill_proc_modifier
+- #2, 22 May 2021, the simulation now supports note-based scorers that doesn't sync with encore (encore still needs to sync with each other) *** ignores amp-stealing of amp on amp-scorer without encore note ***
+Note density look-up: https://docs.google.com/spreadsheets/d/1D48qaGuk4cjh8nbZkpR3NqGjO57jhKwkfS6Chqg7rV4/
 """
 import numpy as np
 import matplotlib.pyplot as plt
 
 # Edit parameters here
-total_note = 698 # note count of the song of interest (porkbun's default for master is 698)
-note_density = 6.17 # average note density
-team_tap_power = 70000 # total team attribute (smile/pure/cool) that is relevant to the song
-team_tap_mult = 9 # total team multiplier (1 for each card that match song attribute and 1 for each card that match song group)
-tap_score_modifier = 1 # a catch-all parameter to help you tune the calculated tap score to match what you actually get when you turn skills off
-perfect_rate = 85 # tap perfect rate
-encore_note = 26 # note count of scorer and encore
-amp1_note = 22 # note count of 1st amp
-amp2_note = 20 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
+total_note = 840 # note count of the song of interest (porkbun's default for master is 698)
+note_density = 7.49 # average note density
+team_tap_power = 94453 # total team attribute (smile/pure/cool) that is relevant to the song
+team_tap_mult = 13 # total team multiplier (1 for each card that match song attribute and 1 for each card that match song group)
+tap_score_modifier = 1.026 * 1.1 # a catch-all parameter to help you tune the calculated tap score to match what you actually get when you turn skills off
+skill_proc_modifier = 1.1 # for chalfes/medfes
+perfect_rate = 95 # tap perfect rate
+loadout_profile = 11 # so you can configure a few teams and change just one line to switch
+loadout_name = "default"
+
+# default team parameters (i.e. loadout 0)
+encore_note = 25 # note count of encore
+scorer_note = 25 # note count of scorer (ideally should match the encore)
+amp1_note = 20 # note count of 1st amp
+amp2_note = 22 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
 sru_note = 32 # note count of sru
-encore_chance = [40, 40, 40, 40, 40] # list of your encore activation chance, should be of length 5
-amp1_chance = 68 # activation chance of 1st amp
-amp2_chance = 66 # activation chance of 2nd amp
-scorer_chance = 64 # activation chance of scorer
-sru_chance = 42 # activation chance of sru
-amp1_sl = 7 # skill level of 1st amp
+encore_chance = [42, 42, 42, 42, 38] # list of your encore activation chance, should be of length 5
+amp1_chance = 66 # activation chance of 1st amp
+amp2_chance = 72 # activation chance of 2nd amp
+scorer_chance = 56 # activation chance of scorer
+sru_chance = 40 # activation chance of sru
+amp1_sl = 8 # skill level of 1st amp
 amp2_sl = 8 # skill level of 2nd amp
-scorer_sl = 8 # skill level of scorer
-sru_sl = 7 # skill level of sru
 # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
-scorer_mag = [4025, 4430, 5240, 6455, 8070, 8535, 9465, 10855, 12710] # score gain from scorer, pre-charm
-sru_mag = [27, 29, 32, 37, 44, 55, 60, 70, 86, 106] # skill chance up of sru
-sru_len = [6, 6.5] # skill duration of sru
+scorer_mag = [4435, 4875, 5760, 7090, 8860, 9370, 10385, 11915, 13955] # score gain from scorer, pre-charm
+sru_mag = [22, 24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
+sru_len = [7.5, 8] # skill duration of sru
+
+# replace eli sru with maki sru
+if loadout_profile == 2:
+    team_tap_power = 103438
+    sru_chance = 42 # activation chance of sru
+    sru_mag = [27, 29, 32, 37, 44, 55, 60, 70, 86, 106] # skill chance up of sru
+    sru_len = [5.5, 6] # skill duration of sru
+    team_tap_mult = 14
+
+# eli sru maxed
+if loadout_profile == 3:
+    team_tap_power = 94453
+    sru_chance = 43 # activation chance of sru
+    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
+    sru_len = [8] # skill duration of sru
+    team_tap_mult = 13
+    encore_chance = [42, 42, 42, 46, 46]
+
+# eli sru maxed, replace bokuhika maki with soreboku
+if loadout_profile == 4:
+    team_tap_power = 94453
+    sru_chance = 43 # activation chance of sru
+    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
+    sru_len = [8] # skill duration of sru
+    team_tap_mult = 13
+    amp1_note = 21
+    amp1_chance = 72
+    encore_chance = [42, 42, 42, 46, 46]
+
+# eli sru maxed, upgrade encore instead of new amp
+if loadout_profile == 5:
+    team_tap_power = 94453
+    sru_chance = 43 # activation chance of sru
+    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
+    sru_len = [8] # skill duration of sru
+    team_tap_mult = 13
+    encore_chance = [50, 50, 46, 46, 46]
+
+# marucore with zodiac maki
+if loadout_profile == 6:
+    team_tap_power = 80507
+    team_tap_mult = 11
+    encore_note = 26 # note count of encore
+    scorer_note = 26
+    encore_chance = [40, 40, 40, 40, 40] # list of your encore activation chance, should be of length 5
+    scorer_chance = 64 # activation chance of scorer
+    amp1_sl = 8 # skill level of 1st amp
+    amp2_sl = 8 # skill level of 2nd amp
+    # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
+    scorer_mag = [4025, 4430, 5240, 6455, 8070, 8535, 9465, 10855, 12710] # score gain from scorer, pre-charm
+
+# elicore 3 unity 2 soreboku
+if loadout_profile == 7:
+    team_tap_power = 68945
+    team_tap_mult = 4
+    encore_chance = [42, 42, 38, 38, 38]
+
+# elicore 2 unity 3 soreboku
+if loadout_profile == 8:
+    team_tap_power = 65961
+    team_tap_mult = 3
+    encore_chance = [42, 42, 42, 38, 38]
+
+# elicore 1 unity 4 soreboku
+if loadout_profile == 9:
+    team_tap_power = 62859
+    team_tap_mult = 2
+    encore_chance = [42, 42, 42, 42, 38]
+
+# elicore 10 mic
+if loadout_profile == 10:
+    loadout_name = "elicore 10 mic"
+    team_tap_power = 94453
+    sru_chance = 43 # activation chance of sru
+    sru_mag = [24, 26, 31, 39, 49, 54, 64, 79, 98] # skill chance up of sru
+    sru_len = [8] # skill duration of sru
+    team_tap_mult = 13
+    encore_chance = [54, 54, 54, 54, 54]
+
+
+# test: cheer rin 30n scorer + panacore 30n
+if loadout_profile == 11:
+    loadout_name = "15n/30n panacore test"
+    encore_note = 30 # note count of scorer and encore
+    scorer_note = 15 # SPECIAL: 15n scorer and 30n amp case (or any case where scorer has exactly half the note requirement of encorer)
+    amp1_note = 21 # note count of 1st amp
+    amp2_note = 22 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
+    sru_note = 31 # note count of sru
+    encore_chance = [65, 65, 65, 65, 65] # list of your encore activation chance, should be of length 5
+    amp1_chance = 69 # activation chance of 1st amp
+    amp2_chance = 72 # activation chance of 2nd amp
+    scorer_chance = 64 # activation chance of scorer
+    sru_chance = 41 # activation chance of sru
+    amp1_sl = 8 # skill level of 1st amp
+    amp2_sl = 8 # skill level of 2nd amp
+    # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
+    scorer_mag = [2200, 2425, 2880, 3555, 4460, 4715, 5225, 5990, 7015] # score gain from scorer, pre-charm
+    sru_mag = [26, 26, 31, 39, 51, 54, 64, 79, 102] # skill chance up of sru
+    sru_len = [7] # skill duration of sru
+
+# test: cheer rin 30n scorer + panacore 30n
+if loadout_profile == 12:
+    loadout_name = "30n/30n panacore test"
+    encore_note = 30 # note count of scorer and encore
+    scorer_note = 30 # SPECIAL: 15n scorer and 30n amp case (or any case where scorer has exactly half the note requirement of encorer)
+    amp1_note = 21 # note count of 1st amp
+    amp2_note = 22 # note count of 2nd amp (2nd amp is to the right of 1st amp, in case both are not sl8)
+    sru_note = 31 # note count of sru
+    encore_chance = [65, 65, 65, 65, 65] # list of your encore activation chance, should be of length 5
+    amp1_chance = 69 # activation chance of 1st amp
+    amp2_chance = 72 # activation chance of 2nd amp
+    scorer_chance = 64 # activation chance of scorer
+    sru_chance = 41 # activation chance of sru
+    amp1_sl = 8 # skill level of 1st amp
+    amp2_sl = 8 # skill level of 2nd amp
+    # magnitude and length is given as a list where the first element is its base skill level and last element is the max value
+    scorer_mag = [4385, 9145, 9145, 9145, 9145, 14330, 14330, 14330, 14330]  # score gain from scorer, pre-charm
+    sru_mag = [26, 26, 31, 39, 51, 54, 64, 79, 102] # skill chance up of sru
+    sru_len = [7] # skill duration of sru
 
 # Do NOT edit (unless you know what you're doing)
 def rng(chance):
+    chance *= skill_proc_modifier
     if chance > 100:
         return True
     if np.random.binomial(1, chance/100) == 1:
@@ -133,7 +261,7 @@ def simulate():
         
         amp1_activate = (note % amp1_note == 0 and rng(amp1_chance * sru_active_mag))
         amp2_activate = (note % amp2_note == 0 and rng(amp2_chance * sru_active_mag))
-        scorer_activate = rng(scorer_chance * sru_active_mag)
+        scorer_activate = (note % scorer_note == 0) and rng(scorer_chance * sru_active_mag)
         amp_activate = (amp1_activate or amp2_activate)
 
         if encore_activate:
@@ -222,6 +350,11 @@ def simulate():
                         current_amp_charge = 0
 
         else: # no encore-scorer combo on this note
+            if scorer_activate:
+                score += 2.5 * amp(scorer_mag, current_amp_charge)
+                last_activated_skill = "scorer"
+                last_skill_amp_level = current_amp_charge
+                current_amp_charge = 0
             if amp_activate:
                 if sru_activate:
                     if amp_coin_flip:
@@ -279,7 +412,11 @@ if __name__ == "__main__":
     plt.show()
 
     print("Simulation Result")
+    print("Loadout:", loadout_profile)
+    print("Name:", loadout_name)
     print("Tap Score:", tap_score)
     print("Mean Score:", np.mean(simulated_score))
     print("Standard Deviation:", np.std(simulated_score))
+    print("95-th Percentile Score:", np.percentile(simulated_score, 95))
     print("99-th Percentile Score:", np.percentile(simulated_score, 99))
+    print("0.01% High Score:", max(simulated_score))
