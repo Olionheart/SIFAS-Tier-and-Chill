@@ -28,9 +28,23 @@ NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE US
 # in particular, I used a list for T10 collage and an integer for title collage. Therefore, if you use list, it will also flush from the bottom reading from bottom_flush_list. 
 # bottom_flush_list is NOT used if last_image_row_to_flush is an integer (unless you modify it yourself, of course. I told you it's quick and dirty)
 
-# my settings for T10 collage (or any event ranking collage)
-last_image_row_to_flush = [0, 1, 1, 1]
-bottom_flush_list = [1, 0, 1, 1]
+# iPhone T10
+"""
+last_image_row_to_flush = [0, 2]
+bottom_flush_list = [1, 1]
+top_crop = 240
+bot_crop = 1090
+left_crop = 20
+right_crop = 1632
+white_pixel_loc_x = 248
+white_pixel_loc_y = 248
+white_margin_width = 15
+"""
+
+# my settings for T10 collage (or any event ranking collage) - iPad
+"""
+last_image_row_to_flush = [0, 0, 0, 0]
+bottom_flush_list = [1, 1, 1, 3]
 top_crop = 400
 bot_crop = 1327
 left_crop = 20
@@ -38,16 +52,17 @@ right_crop = 1764
 white_pixel_loc_x = 50
 white_pixel_loc_y = 265
 white_margin_width = 18
+"""
 
 # my settings for title collage
-# last_image_row_to_flush = [0, 1, 1, 1]
-# top_crop = 315
-# bot_crop = 1290
-# left_crop = 50
-# right_crop = 1760
-# white_pixel_loc_x = 330
-# white_pixel_loc_y = 230
-# white_margin_width = 28
+last_image_row_to_flush = 3
+top_crop = 315
+bot_crop = 1290
+left_crop = 50
+right_crop = 1760
+white_pixel_loc_x = 330
+white_pixel_loc_y = 230
+white_margin_width = 28
 
 def is_empty_row(img):
     pixel = img[0,:]
@@ -143,7 +158,7 @@ else:
         images.append(final_crop)
 
 
-final_crop = images[-1]
+final_crop = images[-2]
 white_pixel = final_crop[white_pixel_loc_y, white_pixel_loc_x, :]
 row_padding = np.array([[white_pixel for i in range(final_crop.shape[1])] for j in range(white_margin_width)])
 output = row_padding.copy()
