@@ -15,7 +15,9 @@ for i in range(song_count-2):
 medley_note_count.sort(reverse=True)
 cum_note_count = list(accumulate(medley_note_count))
 medley_count = len(medley_note_count)
+print(medley_count)
 
+# optimal stopping criterion (risk-neutral)
 m_j = [0 for i in range(10)]
 E_j = [0 for i in range(11)]
 p_j = [0 for i in range(10)]
@@ -54,7 +56,7 @@ ax3.plot([i for i in range(11)], cum_p_j)
 ax3.set_title('distribution of reroll count')
 ax3.set(xlabel='reroll count', ylabel='probability')
 plt.subplots_adjust(hspace=1)
-plt.show()
+# plt.show()
 
 print("expected rerolls = ", sum([cum_p_j[i] * i for i in range(11)]))
 print("expected note count = ", E_j[0])
@@ -62,3 +64,26 @@ print("optimal stopping note count:")
 for i in range(10):
     print("step", i+1, ":", m_j[i])
 
+# simple stopping criterion (risk-neutral)
+best_E = 0
+best_m = 0
+best_p = 0
+for i in range(medley_count):
+    temp_m = medley_note_count[i]
+    temp_p = (i+1) / medley_count
+    temp_E = (1 - (1 - temp_p) ** 10) * cum_note_count[i] / (i+1) + (1 - temp_p) ** 10 * E_j[10]
+    if temp_E > best_E:
+        best_E = temp_E
+        best_m = temp_m
+        best_p = temp_p
+
+cum_p = list()
+curr_p_max = 1
+for j in range(10):
+    cum_p.append(curr_p_max * best_p)
+    curr_p_max *= (1 - best_p)
+cum_p.append(curr_p_max)
+
+print("stopping criterion =", best_m)     
+print("expected rerolls =", sum([cum_p_j[i] * i for i in range(11)]))   
+print("expected note count =", best_E)
