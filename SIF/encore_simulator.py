@@ -172,14 +172,14 @@ class GameState:
 
     # call when sru_active and activation note of the sru passes (i.e. self-coverage)
     def sru_self_cover(self, sru_index):
-        self.sru_self_cover[sru_index] = True
+        self.sru_covered[sru_index] = True
 
     # call to determine if sru will renew itself
     # return the index of the sru that will renew the sru state
     # if no sru will proc, return -1
     def rng_sru_self_coverage(self):
         for index in range(self.sru_count):
-            if self.sru_self_cover[index] and rng(sru_chance[index]):
+            if self.sru_covered[index] and rng(sru_chance[index]):
                 return index
         return -1
 
@@ -242,7 +242,7 @@ def schedule_sru(note, is_sru_active):
 def schedule_encore(note, active_sru_mag):
     count = 0
     for i in range(len(encore_note)):
-        if note % encore_note == 0:
+        if note % encore_note[i] == 0:
             count += num_encore_proc(encore_chance[i], active_sru_mag)
     return count
 
