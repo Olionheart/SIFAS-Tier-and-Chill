@@ -66,7 +66,7 @@ encore_note = [25] # a list of note count of encore, no duplicate (i.e. if you h
 score_note = [25] # a list of note count of each scorer, from right to left
 amp_note = [20, 22] # a list of note count of each amp, from right to left
 sru_note = [32] # a list of note count of each sru, from right to left (assumes that sru is to the left of all scorers)
-encore_chance = [[42, 42, 42, 42, 38]] # list of list of activation rate of each encore, in the same order as encore_note
+encore_chance = [[42, 42, 42, 42, 42]] # list of list of activation rate of each encore, in the same order as encore_note
 score_chance = [56] # list of activation rate of each scorer, from right to left
 amp_chance = [66, 72] # list of activation rate of each amp, from right to left
 sru_chance = [40] # list of activation rate of each sru, from right to left (assumes that sru is to the left of all scorers)
@@ -75,6 +75,29 @@ score_mag = [[4435, 4875, 5760, 7090, 8860, 9370, 10385, 11915, 13955]] # list o
 amp_mag = [8, 8] # list of skill level of each amp
 sru_mag = [[22, 24, 26, 31, 39, 49, 54, 64, 79, 98]] # list of list of magnitude of each sru
 sru_len = [[7.5, 8]] # list of list of duration of each sru
+
+if loadout_profile == 1:
+    loadout_name = "unit test: one cycle"
+    total_note = 25
+    skill_proc_modifier = 1
+    team_attribute = [0, 0, 0]
+
+if loadout_profile == 2:
+    loadout_name = "unit test: two cycles no sru"
+    total_note = 50
+    skill_proc_modifier = 1
+    team_attribute = [0, 0, 0]
+    sru_note = []
+    sru_chance = []
+    sru_mag = []
+    sru_len = []
+
+if loadout_profile == 3:
+    loadout_name = "unit test: two cycles forced sru"
+    total_note = 50
+    skill_proc_modifier = 1
+    team_attribute = [0, 0, 0]
+    sru_chance = [100]
 
 assert len(encore_note) == len(encore_chance)
 assert len(score_note) == len(score_chance)
@@ -292,7 +315,7 @@ def simulate(spell_queue):
 
         # resolve sru
         if sru_schedule != -1:
-            magnitude = amp(sru_mag[sru_schedule], game_state.get_amp())
+            magnitude = 1 + amp(sru_mag[sru_schedule], game_state.get_amp()) / 100
             length = amp(sru_len[sru_schedule], game_state.get_amp())
             game_state.proc_sru(magnitude, length, note)   
 
@@ -305,6 +328,8 @@ def simulate(spell_queue):
             if not amp_stealing:
                 amp_amp_power = game_state.get_amp()
             game_state.proc_amp(get_amp_level(amp_mag[amp_schedule] + amp_amp_power))
+
+        # print(note, game_state.curr_amp)
 
     return game_state.get_score()
 
@@ -333,6 +358,7 @@ if __name__ == "__main__":
     simulated_score = list()
     for simulation_round in range(10000):
         simulated_score.append(simulate(spell_queue) + tap_score)
+        # print(" ")
 
     if not suppress_distribution_plot:
         plt.hist(simulated_score, 50)
@@ -341,9 +367,9 @@ if __name__ == "__main__":
     print("Simulation Result")
     print("Loadout:", loadout_profile)
     print("Name:", loadout_name)
-    print("Tap Score:", tap_score)
-    print("Mean Score:", np.mean(simulated_score))
-    print("Standard Deviation:", np.std(simulated_score))
-    print("95-th Percentile Score:", np.percentile(simulated_score, 95))
-    print("99-th Percentile Score:", np.percentile(simulated_score, 99))
-    print("0.01% High Score:", max(simulated_score))
+    print("Tap Score:", f'{round(tap_score):,}')
+    print("Mean Score:", f'{round(np.mean(simulated_score)):,}')
+    print("Standard Deviation:", f'{round(np.std(simulated_score)):,}')
+    print("95-th Percentile Score:", f'{round(np.percentile(simulated_score, 95)):,}')
+    print("99-th Percentile Score:", f'{round(np.percentile(simulated_score, 99)):,}')
+    print("0.01% High Score:", f'{round(max(simulated_score)):,}')
